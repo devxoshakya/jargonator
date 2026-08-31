@@ -1,159 +1,133 @@
-# Turborepo starter
+# Jargonator
 
-This Turborepo starter is maintained by the Turborepo core team.
+Turn raw, unfiltered venting — in Hindi, English, or a mix of both — into polished, strategically-toned professional messages.
 
-## Using this example
+Jargonator is a private utility that takes what you *actually* want to say and rewrites it into something you can safely send: diplomatic when you need to be careful, firm when you need an answer, executive when you need it to just get done.
 
-Run the following command:
+---
 
-```sh
-npx create-turbo@latest
+## How it works
+
+**1. Unlock with your access key**
+
+<img src="/.github/assets/lock.png" alt="Jargonator API key gate screen" width="480" />
+
+Jargonator is a private, single-user tool gated behind a shared secret key. Enter it once — it's checked against the backend and stored locally so you won't need to re-enter it on future visits.
+
+**2. Write, configure, transform**
+
+<img src="/.github/assets/landing.png" alt="Jargonator two-column landing UI" width="720" />
+
+- **What I actually think** — dump your raw, unfiltered message exactly as it comes to you
+- **Tone** — Diplomatic, Firm, Assertive, or Executive
+- **Relationship** — Peer, Senior, Client, or Junior — controls formality and how much pressure is appropriate
+- **Context** *(optional)* — e.g. "3rd follow-up on this" — helps the model justify pressure honestly instead of inventing a reason
+- **What I should send** — the rewritten, ready-to-copy result appears on the right
+
+---
+
+## Features
+
+- 🎭 **Tone-aware rewriting** — four distinct communication registers, not just "make it nicer"
+- 🤝 **Relationship-aware framing** — same message reads differently to a client vs. a peer, and Jargonator adjusts accordingly
+- 🌐 **Native Hindi/English code-switch support** — no pre-translation step; raw mixed-language input goes straight to the model
+- 🔒 **Private by design** — single shared-secret access key, no accounts, no tracking
+- ⚡ **Edge-deployed** — runs on Cloudflare Workers with Workers AI, no cold starts, no servers to manage
+- 🚦 **Rate limited** — 5 requests/minute per client, enforced at the edge via KV
+
+---
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Backend framework | [Hono](https://hono.dev) |
+| Runtime | Cloudflare Workers |
+| Inference | Cloudflare Workers AI (`@cf/google/gemma-4-26b-a4b-it-external`) |
+| Rate limiting | Cloudflare KV (fixed-window counter) |
+| Frontend | React |
+
+---
+
+## API
+
+### `GET /`
+
+Health/auth check. Returns `200` if the supplied key is valid, `401` otherwise. Used by the frontend to validate a key before storing it.
+
+```bash
+curl https://jargonator.devxoshakya.workers.dev/ \
+  -H "X-Jargonator-Key: your-key"
 ```
 
-## What's inside?
+### `POST /api/jargonate`
 
-This Turborepo includes the following packages/apps:
+Transforms a raw message into a polished one.
 
-### Apps and Packages
-
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `@next/eslint-plugin-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo build
+```bash
+curl -X POST https://jargonator.devxoshakya.workers.dev/api/jargonate \
+  -H "Content-Type: application/json" \
+  -H "X-Jargonator-Key: your-key" \
+  -d '{
+    "raw": "bhai seriously 3 baar bol chuka hu, ab bardaash nahi hota",
+    "tone": "firm",
+    "relationship": "peer",
+    "context": "3rd follow-up on the same request"
+  }'
 ```
 
-Without global `turbo`, use your package manager:
+**Request body**
 
-```sh
-cd my-turborepo
-npx turbo build
-bun exec turbo build
-bun exec turbo build
+| Field | Type | Required | Values |
+|---|---|---|---|
+| `raw` | `string` | ✅ | Your raw message (max 2000 chars) |
+| `tone` | `string` | ✅ | `diplomatic` \| `firm` \| `assertive` \| `executive` |
+| `relationship` | `string` | ✅ | `peer` \| `senior` \| `client` \| `junior` |
+| `context` | `string` | ❌ | Extra situational context (max 500 chars) |
+
+**Response**
+
+```json
+{ "jargon": "Hi Rahul, following up on this once more..." }
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+| Status | Meaning |
+|---|---|
+| `200` | Success |
+| `400` | Invalid or missing fields |
+| `401` | Missing/invalid `X-Jargonator-Key` |
+| `429` | Rate limit exceeded (5/min) |
+| `502` | Model generation or parsing failure |
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+---
 
-```sh
-turbo build --filter=docs
+## Local development
+
+```bash
+npm install
+
+# .dev.vars (gitignored) — required for local secret access
+echo 'JARGONATOR_KEY=your-local-test-key' > .dev.vars
+
+npm run dev -- --remote   # Workers AI requires --remote, local sim won't work
 ```
 
-Without global `turbo`:
+## Deployment
 
-```sh
-npx turbo build --filter=docs
-bun exec turbo build --filter=docs
-bun exec turbo build --filter=docs
+```bash
+wrangler kv:namespace create RATE_LIMIT   # paste the returned id into wrangler.toml
+wrangler secret put JARGONATOR_KEY
+npm run deploy
 ```
 
-### Develop
+---
 
-To develop all apps and packages, run the following command:
+## Cost
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+Each call costs roughly **~5 Neurons** (Cloudflare's compute unit) at typical prompt lengths. The Workers Free plan includes **10,000 Neurons/day**, which comfortably covers personal use well before the built-in 5/min rate limiter becomes the binding constraint.
 
-```sh
-cd my-turborepo
-turbo dev
-```
+---
 
-Without global `turbo`, use your package manager:
+## Disclaimer
 
-```sh
-cd my-turborepo
-npx turbo dev
-bun exec turbo dev
-bun exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo dev --filter=web
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo dev --filter=web
-bun exec turbo dev --filter=web
-bun exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-bun exec turbo login
-bun exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-bun exec turbo link
-bun exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+Jargonator is a personal productivity tool for reframing your own words before you send them — not a way to misrepresent facts or manufacture false urgency. Use it to communicate more clearly under pressure, not to manipulate people in bad faith.
